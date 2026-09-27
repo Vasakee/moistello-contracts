@@ -58,7 +58,7 @@ fn test_circle_lifecycle_with_fees() {
     };
 
     let factory = Address::generate(&env);
-    let contract_id = env.register(crate::Circle, (&admin, &factory, &config));
+    let contract_id = env.register(crate::Circle, (&organizer, &factory, &config));
     let client = crate::CircleClient::new(&env, &contract_id);
 
     // Configure circle with treasury and fee
