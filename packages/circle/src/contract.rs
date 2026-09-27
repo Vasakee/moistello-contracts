@@ -46,16 +46,22 @@ pub fn init(
     {
         return Err(CircleError::InvalidAmount);
     }
-    let organizer_score = scoring::get_score(env, &config.organizer);
-    if organizer_score > 0 {
+    if let Some(registry_address) = get_reputation_registry(env) {
+        let registry_client =
+            reputation_registry::ReputationRegistryClient::new(env, &registry_address);
+        if config.max_members > registry_client.calc_max_size(&config.organizer) {
+            return Err(CircleError::CircleSizeExceedsTier);
+        }
+        if config.contribution_amount > registry_client.calc_max_contrib(&config.organizer) {
+            return Err(CircleError::ContributionExceedsTier);
+        }
+    } else if reputation_registry::storage::get_score(env, &config.organizer) > 0 {
         if config.max_members > scoring::max_circle_size(env, &config.organizer) {
             return Err(CircleError::CircleSizeExceedsTier);
         }
         if config.contribution_amount > scoring::max_contribution(env, &config.organizer) {
             return Err(CircleError::ContributionExceedsTier);
         }
-    } else if config.max_members > 100 {
-        return Err(CircleError::CircleSizeExceedsTier);
     }
     let circle = Circle {
         id: env.current_contract_address(),
@@ -988,14 +994,10 @@ pub fn refund_losing_bids(
                     amount: bid.deposit,
                 },
             );
-            refunded = refunded
-                .checked_add(1)
-                .ok_or(CircleError::InvalidAmount)?;
+            refunded = refunded.checked_add(1).ok_or(CircleError::InvalidAmount)?;
         } else {
             if is_loser {
-                remaining = remaining
-                    .checked_add(1)
-                    .ok_or(CircleError::InvalidAmount)?;
+                remaining = remaining.checked_add(1).ok_or(CircleError::InvalidAmount)?;
             }
             kept.push_back(bid);
         }
