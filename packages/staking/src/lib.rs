@@ -107,6 +107,17 @@ impl Staking {
     ) -> Result<(), types::StakingError> {
         contract::update_admin(&env, &current_admin, &new_admin)
     }
+
+    /// #523 — Slash a staker's collateral proportional to shortfall.
+    /// Returns the actual amount slashed (min of shortfall and stake).
+    pub fn slash(
+        env: Env,
+        admin: Address,
+        user: Address,
+        shortfall: i128,
+    ) -> Result<i128, types::StakingError> {
+        contract::slash(&env, &admin, &user, shortfall)
+    }
 }
 
 #[cfg(test)]

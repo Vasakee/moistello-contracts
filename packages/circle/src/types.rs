@@ -14,6 +14,7 @@ pub const MEMBER_DEFAULTED: u32 = 2;
 pub const RESOLVE_DISMISS: u32 = 1;
 pub const RESOLVE_PENALIZE: u32 = 2;
 pub const RESOLVE_FORCE_PAYOUT: u32 = 3;
+pub const RESOLVE_REFUND: u32 = 4;
 pub const AUCTION_MODE_ENGLISH: u32 = 0;
 pub const AUCTION_MODE_DUTCH: u32 = 1;
 #[contracttype]
@@ -149,6 +150,15 @@ pub struct DisputeEntry {
     pub resolved_by: Address,
 }
 #[contracttype]
+#[derive(Clone, Debug)]
+pub struct DisputeResolutionRecord {
+    pub raised_by: Address,
+    pub resolution: u32,
+    pub outcome_code: u32,
+    pub resolved_by: Address,
+    pub resolved_at: u64,
+}
+#[contracttype]
 #[derive(Clone)]
 pub enum DataKey {
     Circle,
@@ -160,6 +170,7 @@ pub enum DataKey {
     Bids,
     Votes,
     Dispute,
+    DisputeResolution,
     FeeBps,
     Treasury,
     Allowlist,
@@ -176,6 +187,12 @@ pub enum DataKey {
     /// Winner of a resolved English auction for this round. Presence means
     /// losing-bid refunds may begin.
     AuctionWinner(u32),
+    /// #325: holds the round number most recently swept by
+    /// `check_contribution_deadline`. Kept as a single instance entry rather
+    /// than one persistent entry per round, because a sweep resolves the round
+    /// immediately and long-running circles would otherwise accumulate an
+    /// entry per round against the ledger-entry budget.
+    RoundEnforced,
 }
 pub use common::types::ErrorEnvelope;
 #[contracterror]
@@ -226,6 +243,17 @@ pub enum CircleError {
     InvalidDutchConfig = 62,
     /// Losing-bid refunds were requested before the auction winner was recorded.
     AuctionNotResolved = 63,
+    /// #329: the round cannot be resolved yet because at least one active
+    /// member has not contributed and the contribution window is still open.
+    InvalidContributionRound = 64,
+    /// #325: deadline enforcement was requested before the round's
+    /// contribution window (deadline plus grace) had actually closed.
+    DeadlineNotPassed = 65,
+    /// #323: a guarded entry point was re-entered while already executing.
+    /// Defence in depth only — the Soroban host already prohibits re-entering
+    /// a contract that is on the call stack, so this should be unreachable
+    /// while that host policy holds. See the module docs in `contract.rs`.
+    ReentrantCall = 66,
 }
 
 impl CircleError {
@@ -280,6 +308,9 @@ impl CircleError {
             CircleError::DutchAuctionExpired => (61, "Dutch auction expired"),
             CircleError::InvalidDutchConfig => (62, "Invalid Dutch auction config"),
             CircleError::AuctionNotResolved => (63, "Auction not resolved"),
+            CircleError::InvalidContributionRound => (64, "Round has outstanding contributions"),
+            CircleError::DeadlineNotPassed => (65, "Contribution deadline not passed"),
+            CircleError::ReentrantCall => (66, "Reentrant call rejected"),
         };
         ErrorEnvelope::new(env, code, msg, details, request_id)
     }
@@ -330,6 +361,9 @@ impl CircleError {
             61 => Some(CircleError::DutchAuctionExpired),
             62 => Some(CircleError::InvalidDutchConfig),
             63 => Some(CircleError::AuctionNotResolved),
+            64 => Some(CircleError::InvalidContributionRound),
+            65 => Some(CircleError::DeadlineNotPassed),
+            66 => Some(CircleError::ReentrantCall),
             _ => None,
         }
     }
@@ -400,6 +434,14 @@ pub struct CircleCancelled {
 pub struct DisputeRaised {
     pub member: Address,
     pub evidence_hash: BytesN<32>,
+}
+#[contracttype]
+#[derive(Clone, Debug)]
+pub struct DisputeResolved {
+    pub member: Address,
+    pub resolution: u32,
+    pub outcome_code: u32,
+    pub resolved_by: Address,
 }
 #[contracttype]
 #[derive(Clone, Debug)]

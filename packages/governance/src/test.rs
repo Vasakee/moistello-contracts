@@ -312,7 +312,7 @@ mod tests {
     }
 
     #[test]
-    fn test_expire_proposal_early_fails() {
+    fn test_proposal_metadata_page_paginates_without_status_filter() {
         let env = Env::default();
         let (client, admin) = setup(&env);
         let action = governance::types::ProposalAction {
@@ -361,5 +361,39 @@ mod tests {
         let expired_list = client.get_proposals(&ProposalStatus::Expired, &10);
         assert_eq!(expired_list.len(), 1);
         assert_eq!(expired_list.get(0).unwrap().id, id);
+
+        let first_description = BytesN::from_array(&env, &[1u8; 32]);
+        let second_description = BytesN::from_array(&env, &[2u8; 32]);
+        let third_description = BytesN::from_array(&env, &[3u8; 32]);
+        client.create_proposal(
+            &admin,
+            &create_config().proposal_deposit,
+            &action,
+            &first_description,
+        );
+        client.create_proposal(
+            &admin,
+            &create_config().proposal_deposit,
+            &action,
+            &second_description,
+        );
+        client.create_proposal(
+            &admin,
+            &create_config().proposal_deposit,
+            &action,
+            &third_description,
+        );
+
+        let first_page = client.get_proposal_metadata_page(&0u64, &2u32);
+        assert_eq!(first_page.total, 3);
+        assert_eq!(first_page.next_cursor, 2);
+        assert_eq!(first_page.entries.len(), 2);
+        assert_eq!(first_page.entries.get(0).unwrap().id, 0);
+        assert_eq!(first_page.entries.get(1).unwrap().description, second_description);
+
+        let second_page = client.get_proposal_metadata_page(&first_page.next_cursor, &50u32);
+        assert_eq!(second_page.entries.len(), 1);
+        assert_eq!(second_page.entries.get(0).unwrap().id, 2);
+        assert_eq!(second_page.entries.get(0).unwrap().description, third_description);
     }
 }

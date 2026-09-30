@@ -74,6 +74,13 @@ impl Governance {
     ) -> Vec<types::Proposal> {
         contract::get_proposals(&env, status, limit)
     }
+    pub fn get_proposal_metadata_page(
+        env: Env,
+        cursor: u64,
+        limit: u32,
+    ) -> types::ProposalMetadataPage {
+        contract::get_proposal_metadata_page(&env, cursor, limit)
+    }
     pub fn get_vote(env: Env, proposal_id: u64, voter: Address) -> Option<types::VoteRecord> {
         contract::get_vote(&env, proposal_id, &voter)
     }

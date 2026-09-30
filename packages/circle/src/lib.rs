@@ -41,6 +41,9 @@ impl Circle {
     ) -> Result<(), types::CircleError> {
         contract::contribute(&env, &member, amount, round)
     }
+    pub fn check_contribution_deadline(env: Env) -> Result<(), types::CircleError> {
+        contract::check_contribution_deadline(&env)
+    }
     pub fn trigger_payout(env: Env, caller: Address, round: u32) -> Result<(), types::CircleError> {
         contract::trigger_payout(&env, &caller, round)
     }
@@ -139,6 +142,9 @@ impl Circle {
     }
     pub fn get_status(env: Env) -> types::Circle {
         contract::get_status(&env)
+    }
+    pub fn get_dispute_resolution(env: Env) -> Option<types::DisputeResolutionRecord> {
+        contract::get_dispute_resolution(&env)
     }
     pub fn get_members(env: Env) -> soroban_sdk::Vec<types::Member> {
         contract::get_members(&env)

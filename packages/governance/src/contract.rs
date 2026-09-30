@@ -702,6 +702,44 @@ pub fn get_proposals(env: &Env, status: ProposalStatus, limit: u32) -> Vec<Propo
     out
 }
 
+fn proposal_metadata(proposal: Proposal) -> ProposalMetadata {
+    ProposalMetadata {
+        id: proposal.id,
+        proposer: proposal.proposer,
+        description: proposal.description,
+        status: proposal.status,
+        created_at: proposal.created_at,
+        voting_ends_at: proposal.voting_ends_at,
+        timelock_ends_at: proposal.timelock_ends_at,
+    }
+}
+
+pub fn get_proposal_metadata_page(env: &Env, cursor: u64, limit: u32) -> ProposalMetadataPage {
+    let total: u64 = env
+        .storage()
+        .instance()
+        .get(&DataKey::ProposalCount)
+        .unwrap_or(0);
+    let capped_limit = if limit > 50 { 50 } else { limit };
+    let mut entries = Vec::new(env);
+    let mut id = cursor;
+    while id < total && (entries.len() as u32) < capped_limit {
+        if let Some(proposal) = env
+            .storage()
+            .persistent()
+            .get::<DataKey, Proposal>(&DataKey::Proposal(id))
+        {
+            entries.push_back(proposal_metadata(proposal));
+        }
+        id += 1;
+    }
+    ProposalMetadataPage {
+        entries,
+        next_cursor: id,
+        total,
+    }
+}
+
 pub fn get_vote(env: &Env, proposal_id: u64, voter: &Address) -> Option<VoteRecord> {
     env.storage()
         .persistent()

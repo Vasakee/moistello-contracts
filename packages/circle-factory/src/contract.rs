@@ -1,6 +1,11 @@
 use crate::types::*;
 use common::pause;
 use soroban_sdk::{symbol_short, Address, BytesN, Env, Vec};
+use soroban_sdk::{symbol_short, xdr::ToXdr, Address, BytesN, Env, Vec};
+
+fn canonical_deployment_salt(env: &Env, config: &CircleConfig) -> BytesN<32> {
+    env.crypto().sha256(&config.to_xdr(env)).into()
+}
 
 /// Initializes the circle factory with admin, fee configuration, and WASM hash.
 ///
@@ -130,6 +135,20 @@ pub fn deploy_circle(env: &Env, config: &CircleConfig) -> Result<Address, Factor
     let cid = env
         .deployer()
         .with_current_contract(BytesN::from_array(env, &salt))
+    }
+    let wh: BytesN<32> = env
+        .storage()
+        .instance()
+        .get(&DataKey::WasmHash)
+        .ok_or(FactoryError::WasmHashNotSet)?;
+    let salt = canonical_deployment_salt(env, config);
+    let deployment_key = DataKey::CanonicalDeployment(salt.clone());
+    if env.storage().persistent().has(&deployment_key) {
+        return Err(FactoryError::CircleDeployFailed);
+    }
+    let cid = env
+        .deployer()
+        .with_current_contract(salt.clone())
         .deploy_v2(wh, (config.organizer.clone(), env.current_contract_address(), config.clone()));
     let now = env.ledger().timestamp();
     let mut circles: Vec<CircleEntry> = env
@@ -144,6 +163,7 @@ pub fn deploy_circle(env: &Env, config: &CircleConfig) -> Result<Address, Factor
         deployed_at: now,
         status: 0,
     });
+    env.storage().persistent().set(&deployment_key, &cid);
     env.storage()
         .persistent()
         .set(&DataKey::CircleConfig(cid.clone()), config);

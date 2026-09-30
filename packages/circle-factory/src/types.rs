@@ -1,4 +1,5 @@
 use soroban_sdk::{contracterror, contracttype, Address, String, Vec};
+use soroban_sdk::{contracterror, contracttype, Address, BytesN, String, Vec};
 #[contracttype]
 #[derive(Clone, Debug)]
 pub struct CircleConfig {
@@ -47,6 +48,7 @@ pub enum DataKey {
     CircleCount,
     WasmHash,
     CircleConfig(Address),
+    CanonicalDeployment(BytesN<32>),
     RateLimitConfig,
     OrganizerPeriodCount(Address, u64),
 }

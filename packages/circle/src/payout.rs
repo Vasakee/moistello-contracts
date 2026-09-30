@@ -2,6 +2,16 @@ use crate::types::*;
 use common::vrf;
 use soroban_sdk::{Address, Env, Map, Vec};
 
+fn ensure_active_unpaid_member(circle: &Circle, member: &Member) -> Result<(), CircleError> {
+    if member.status != MEMBER_ACTIVE {
+        return Err(CircleError::InvalidMemberStatus);
+    }
+    if (circle.payout_bitmap & (1u128 << member.position)) != 0 {
+        return Err(CircleError::PayoutAlreadyExecuted);
+    }
+    Ok(())
+}
+
 pub fn resolve_random(env: &Env, circle: &Circle, round: u32) -> Result<Address, CircleError> {
     let positions = vrf::shuffle_positions(env, circle.max_members, round * 1000)
         .map_err(|_| CircleError::InvalidAmount)?;
@@ -92,6 +102,7 @@ pub fn resolve_auction(
             if (circle.payout_bitmap & (1u128 << m.position)) != 0 {
                 return Err(CircleError::PayoutAlreadyExecuted);
             }
+            ensure_active_unpaid_member(circle, &m)?;
             return Ok((winner_bid.bidder, winner_bid.discount_bips));
         }
     }
@@ -134,6 +145,15 @@ pub fn resolve_vote(env: &Env, circle: &Circle, round: u32) -> Result<Address, C
             best_addr = Some(addr);
         }
     }
+    }
+    let mut best_addr: Option<Address> = None;
+    let mut best_count: u32 = 0;
+    for (addr, count) in tally.iter() {
+        if count > best_count {
+            best_count = count;
+            best_addr = Some(addr);
+        }
+    }
     let winner = best_addr.ok_or(CircleError::VoteQuorumNotMet)?;
     for i in 0..members.len() {
         let m = members.get(i).ok_or(CircleError::VecAccessError)?;
@@ -141,6 +161,7 @@ pub fn resolve_vote(env: &Env, circle: &Circle, round: u32) -> Result<Address, C
             if (circle.payout_bitmap & (1u128 << m.position)) != 0 {
                 return Err(CircleError::PayoutAlreadyExecuted);
             }
+            ensure_active_unpaid_member(circle, &m)?;
             return Ok(winner);
         }
     }
